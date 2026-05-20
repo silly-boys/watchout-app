@@ -17,7 +17,7 @@ import { clamp, toSvgPoints } from "../utils";
 
 type Props = {
   visible: boolean;
-  streamUrl: string;
+  offerUrl: string;
   initialZones: Zone[];
   onDone: (zones: Zone[]) => void;
   onCancel: () => void;
@@ -25,7 +25,7 @@ type Props = {
 
 export function FullscreenDrawModal({
   visible,
-  streamUrl,
+  offerUrl,
   initialZones,
   onDone,
   onCancel,
@@ -38,11 +38,11 @@ export function FullscreenDrawModal({
   const draftPointsRef = useRef<Point[]>([]);
 
   useEffect(() => {
-  if (visible) {
-    setZones(initialZones);
-    setDraftPoints([]);
-    draftPointsRef.current = [];
-    lastPointRef.current = null;
+    if (visible) {
+      setZones(initialZones);
+      setDraftPoints([]);
+      draftPointsRef.current = [];
+      lastPointRef.current = null;
     }
   }, [visible]);
 
@@ -115,11 +115,11 @@ export function FullscreenDrawModal({
     <Modal visible={visible} animationType="fade" statusBarTranslucent>
       <StatusBar style="light" hidden />
       <View style={styles.container} onLayout={handleLayout}>
-        {streamUrl ? (
-          <StreamWebView streamUrl={streamUrl} style={StyleSheet.absoluteFill} />
+        {offerUrl ? (
+          <StreamWebView offerUrl={offerUrl} style={StyleSheet.absoluteFill} />
         ) : (
           <View style={styles.emptyStream}>
-            <Text style={styles.emptyStreamText}>스트림 연결 후 지정하세요</Text>
+            <Text style={styles.emptyStreamText}>카메라를 연결한 후 구역을 지정하세요</Text>
           </View>
         )}
         <View style={StyleSheet.absoluteFill} {...panResponder.panHandlers}>
@@ -132,8 +132,8 @@ export function FullscreenDrawModal({
               <Polygon
                 key={zone.id}
                 points={toSvgPoints(zone.points, containerSize)}
-                fill="rgba(255, 149, 0, 0.28)"
-                stroke="#ff3b30"
+                fill="rgba(255, 109, 0, 0.25)"
+                stroke="#FF6D00"
                 strokeWidth="3"
               />
             ))}
@@ -141,7 +141,7 @@ export function FullscreenDrawModal({
               <Polyline
                 points={toSvgPoints(draftPoints, containerSize)}
                 fill="none"
-                stroke="#ff3b30"
+                stroke="#FF6D00"
                 strokeDasharray="8 6"
                 strokeLinecap="round"
                 strokeLinejoin="round"
@@ -150,6 +150,7 @@ export function FullscreenDrawModal({
             )}
           </Svg>
         </View>
+
         <View
           style={[
             styles.controls,
@@ -166,15 +167,21 @@ export function FullscreenDrawModal({
             <Text style={styles.doneBtnText}>완료</Text>
           </Pressable>
         </View>
+
         <View
           style={[
-            styles.hint,
-            { bottom: insets.bottom + 12, left: insets.left + 16 },
+            styles.hintWrap,
+            { bottom: insets.bottom + 20, left: insets.left + 16, right: insets.right + 16 },
           ]}
         >
           <Text style={styles.hintText}>
-            손가락으로 위험구역을 드래그해 그려주세요
+            손가락으로 위험구역을 따라 드래그해 그려주세요
           </Text>
+          {zones.length > 0 && (
+            <Text style={styles.zoneCount}>
+              {zones.length}개 구역 지정됨
+            </Text>
+          )}
         </View>
       </View>
     </Modal>
@@ -190,12 +197,14 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#8f8f8f",
+    backgroundColor: "#1A1A2E",
+    padding: 24,
   },
   emptyStreamText: {
-    color: "#ffffff",
-    fontSize: 15,
-    fontWeight: "800",
+    color: "rgba(255,255,255,0.8)",
+    fontSize: 18,
+    fontWeight: "700",
+    textAlign: "center",
   },
   controls: {
     position: "absolute",
@@ -204,33 +213,53 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   ghostBtn: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    backgroundColor: "rgba(0,0,0,0.55)",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.4)",
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    backgroundColor: "rgba(0,0,0,0.65)",
+    borderWidth: 1.5,
+    borderColor: "rgba(255,255,255,0.45)",
+    borderRadius: 8,
   },
   ghostBtnText: {
-    color: "#ffffff",
-    fontSize: 14,
+    color: "#FFFFFF",
+    fontSize: 16,
     fontWeight: "700",
   },
   doneBtn: {
-    paddingHorizontal: 20,
-    paddingVertical: 8,
-    backgroundColor: "#ff3b30",
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    backgroundColor: "#1B3A6B",
+    borderRadius: 8,
   },
   doneBtnText: {
-    color: "#ffffff",
-    fontSize: 14,
+    color: "#FFFFFF",
+    fontSize: 16,
     fontWeight: "800",
   },
-  hint: {
+  hintWrap: {
     position: "absolute",
+    alignItems: "center",
+    gap: 6,
   },
   hintText: {
-    color: "rgba(255,255,255,0.75)",
-    fontSize: 13,
+    color: "rgba(255,255,255,0.85)",
+    fontSize: 16,
     fontWeight: "600",
+    textAlign: "center",
+    backgroundColor: "rgba(0,0,0,0.5)",
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+    overflow: "hidden",
+  },
+  zoneCount: {
+    color: "#FFFFFF",
+    fontSize: 15,
+    fontWeight: "700",
+    backgroundColor: "#1B3A6B",
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 20,
+    overflow: "hidden",
   },
 });

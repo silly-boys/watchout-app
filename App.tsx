@@ -15,9 +15,9 @@ import { AlertCard } from "./src/components/AlertCard";
 import { FullscreenDrawModal } from "./src/components/FullscreenDrawModal";
 import { StreamWebView } from "./src/components/StreamWebView";
 import { testBackendConnection, BackendConnectionStatus } from "./src/api";
-import { INITIAL_ALERTS, DEFAULT_STREAM_URL, BACKEND_BASE_URL } from "./src/constants";
+import { INITIAL_ALERTS, DEFAULT_STREAM_URL } from "./src/constants";
 import { Zone } from "./src/types";
-import { normalizeStreamUrl, toSvgPoints } from "./src/utils";
+import { buildOfferUrl, toSvgPoints } from "./src/utils";
 
 export default function Root() {
   return (
@@ -30,133 +30,184 @@ export default function Root() {
 function App() {
   const insets = useSafeAreaInsets();
   const [urlInput, setUrlInput] = useState(DEFAULT_STREAM_URL);
-  const [streamUrl, setStreamUrl] = useState("");
+  const [offerUrl, setOfferUrl] = useState("");
   const [zones, setZones] = useState<Zone[]>([]);
   const [streamSize, setStreamSize] = useState({ width: 0, height: 0 });
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [backendStatus, setBackendStatus] =
-    useState<BackendConnectionStatus>({
-      ok: false,
-      message: "백엔드 확인 중",
-    });
+  const [isCheckingServer, setIsCheckingServer] = useState(true);
+  const [backendStatus, setBackendStatus] = useState<BackendConnectionStatus>({
+    ok: false,
+    message: "서버 연결 확인 중",
+  });
 
   const refreshBackendStatus = async () => {
-    setBackendStatus({ ok: false, message: "백엔드 확인 중" });
-    setBackendStatus(await testBackendConnection());
+    setIsCheckingServer(true);
+    setBackendStatus({ ok: false, message: "서버 연결 확인 중" });
+    const result = await testBackendConnection();
+    setBackendStatus(result);
+    setIsCheckingServer(false);
   };
 
   useEffect(() => {
     refreshBackendStatus();
   }, []);
 
-  const connectStream = () => setStreamUrl(normalizeStreamUrl(urlInput));
+  const connectStream = () => setOfferUrl(buildOfferUrl(urlInput));
 
   const handleStreamLayout = (event: LayoutChangeEvent) => {
     const { width, height } = event.nativeEvent.layout;
     setStreamSize({ width, height });
   };
 
+  const serverDotColor = isCheckingServer
+    ? "#F57F17"
+    : backendStatus.ok
+    ? "#2E7D32"
+    : "#C62828";
+
+  const serverStatusText = isCheckingServer
+    ? "확인 중..."
+    : backendStatus.ok
+    ? "정상 연결됨"
+    : backendStatus.message;
+
   return (
-    <View style={styles.safeArea}>
+    <View style={styles.root}>
       <StatusBar style="light" />
-      <View style={[styles.header, { paddingTop: insets.top }]}>
-        <Text style={styles.headerTitle}>안전 모니터링</Text>
+
+      <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
+        <Text style={styles.headerTitle}>WatchOut</Text>
+        <Text style={styles.headerSub}>현장 안전 모니터링</Text>
       </View>
 
       <ScrollView
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
-        <View style={styles.streamCard} onLayout={handleStreamLayout}>
-          {streamUrl && !isFullscreen ? (
-            <StreamWebView streamUrl={streamUrl} style={styles.webView} />
-          ) : (
-            <View style={styles.emptyStream}>
-              <Text style={styles.emptyStreamText}>
-                {streamUrl ? "위험구역 지정 중" : "실시간 영상 띄워주는 모니터"}
-              </Text>
-            </View>
-          )}
-          <View style={styles.zoneOverlay} pointerEvents="none">
-            <Svg
-              width="100%"
-              height="100%"
-              viewBox={`0 0 ${streamSize.width || 1} ${streamSize.height || 1}`}
+        {/* Server Status */}
+        <Pressable style={styles.serverCard} onPress={refreshBackendStatus}>
+          <View style={[styles.serverDot, { backgroundColor: serverDotColor }]} />
+          <View style={styles.serverBody}>
+            <Text style={styles.serverLabel}>AI 서버 상태</Text>
+            <Text
+              style={[
+                styles.serverStatus,
+                { color: backendStatus.ok ? "#2E7D32" : isCheckingServer ? "#E65100" : "#C62828" },
+              ]}
             >
-              {zones.map((zone) => (
-                <Polygon
-                  key={zone.id}
-                  points={toSvgPoints(zone.points, streamSize)}
-                  fill="rgba(255, 149, 0, 0.28)"
-                  stroke="#ff3b30"
-                  strokeWidth="3"
-                />
-              ))}
-            </Svg>
+              {serverStatusText}
+            </Text>
+          </View>
+          <Text style={styles.serverRefreshLabel}>탭하여 새로고침</Text>
+        </Pressable>
+
+        {/* Live Camera */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>실시간 카메라</Text>
+          <View style={styles.streamCard} onLayout={handleStreamLayout}>
+            {offerUrl && !isFullscreen ? (
+              <StreamWebView offerUrl={offerUrl} style={styles.webView} />
+            ) : (
+              <View style={styles.emptyStream}>
+                <Text style={styles.emptyStreamIcon}>
+                  {offerUrl ? "▶" : "■"}
+                </Text>
+                <Text style={styles.emptyStreamText}>
+                  {offerUrl ? "위험구역 지정 중" : "카메라 미연결"}
+                </Text>
+                {!offerUrl && (
+                  <Text style={styles.emptyStreamHint}>
+                    아래에서 카메라 주소를 입력하고 연결하세요
+                  </Text>
+                )}
+              </View>
+            )}
+            <View style={styles.zoneOverlay} pointerEvents="none">
+              <Svg
+                width="100%"
+                height="100%"
+                viewBox={`0 0 ${streamSize.width || 1} ${streamSize.height || 1}`}
+              >
+                {zones.map((zone) => (
+                  <Polygon
+                    key={zone.id}
+                    points={toSvgPoints(zone.points, streamSize)}
+                    fill="rgba(255, 109, 0, 0.25)"
+                    stroke="#FF6D00"
+                    strokeWidth="3"
+                  />
+                ))}
+              </Svg>
+            </View>
           </View>
         </View>
 
-        <View style={styles.connectionRow}>
-          <TextInput
-            value={urlInput}
-            onChangeText={setUrlInput}
-            onSubmitEditing={connectStream}
-            autoCapitalize="none"
-            autoCorrect={false}
-            keyboardType="url"
-            placeholder="http://10.80.162.190:8080/stream"
-            placeholderTextColor="#9b9b9b"
-            style={styles.urlInput}
-          />
-          <Pressable style={styles.connectButton} onPress={connectStream}>
-            <Text style={styles.connectButtonText}>연결</Text>
-          </Pressable>
+        {/* Camera Connection */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>카메라 주소</Text>
+          <View style={styles.connectionRow}>
+            <TextInput
+              value={urlInput}
+              onChangeText={setUrlInput}
+              onSubmitEditing={connectStream}
+              autoCapitalize="none"
+              autoCorrect={false}
+              keyboardType="url"
+              placeholder="http://카메라IP:포트"
+              placeholderTextColor="#9AABB8"
+              style={styles.urlInput}
+            />
+            <Pressable style={styles.connectButton} onPress={connectStream}>
+              <Text style={styles.connectButtonText}>연결</Text>
+            </Pressable>
+          </View>
         </View>
 
-        <View style={styles.actionRow}>
+        {/* Danger Zone Setup */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>위험구역 설정</Text>
           <Pressable
             style={styles.zoneButton}
             onPress={() => setIsFullscreen(true)}
           >
-            <Text style={styles.zoneButtonText}>+ 위험구역 지정하기</Text>
+            <Text style={styles.zoneButtonPlus}>+</Text>
+            <Text style={styles.zoneButtonText}>위험구역 지정하기</Text>
           </Pressable>
-          <Pressable style={styles.clearButton} onPress={() => setZones([])}>
-            <Text style={styles.clearButtonText}>초기화</Text>
-          </Pressable>
+          {zones.length > 0 ? (
+            <View style={styles.zoneInfo}>
+              <Text style={styles.zoneInfoText}>
+                지정된 구역: {zones.map((z) => z.name).join(", ")}
+              </Text>
+              <Pressable onPress={() => setZones([])}>
+                <Text style={styles.zoneClearText}>전체 삭제</Text>
+              </Pressable>
+            </View>
+          ) : (
+            <Text style={styles.zoneHint}>
+              위험구역을 지정하면 침입 감지 기준으로 사용됩니다
+            </Text>
+          )}
         </View>
 
-        <View style={styles.zoneSummary}>
-          <Text style={styles.zoneSummaryText}>
-            {zones.length > 0
-              ? `${zones.map((z) => z.name).join(", ")} 지정됨`
-              : "위험구역을 그리면 침입 감지 기준으로 사용할 수 있어요."}
-          </Text>
-        </View>
-
-        <Pressable style={styles.backendStatus} onPress={refreshBackendStatus}>
-          <View
-            style={[
-              styles.backendStatusDot,
-              backendStatus.ok && styles.backendStatusDotOnline,
-            ]}
-          />
-          <View style={styles.backendStatusBody}>
-            <Text style={styles.backendStatusLabel}>백엔드</Text>
-            <Text style={styles.backendStatusText}>{backendStatus.message}</Text>
-            <Text style={styles.backendUrlText}>{BACKEND_BASE_URL}</Text>
+        {/* Alert List */}
+        <View style={styles.section}>
+          <View style={styles.alertHeader}>
+            <Text style={styles.sectionTitle}>감지 알림</Text>
+            <View style={styles.alertBadge}>
+              <Text style={styles.alertBadgeText}>{INITIAL_ALERTS.length}</Text>
+            </View>
           </View>
-        </Pressable>
-
-        <View style={styles.alertList}>
-          {INITIAL_ALERTS.map((alert) => (
-            <AlertCard key={alert.id} alert={alert} />
-          ))}
+          <View style={styles.alertList}>
+            {INITIAL_ALERTS.map((alert) => (
+              <AlertCard key={alert.id} alert={alert} />
+            ))}
+          </View>
         </View>
       </ScrollView>
 
       <FullscreenDrawModal
         visible={isFullscreen}
-        streamUrl={streamUrl}
+        offerUrl={offerUrl}
         initialZones={zones}
         onDone={(newZones) => {
           setZones(newZones);
@@ -169,46 +220,106 @@ function App() {
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
+  root: {
     flex: 1,
-    backgroundColor: "#ffffff",
+    backgroundColor: "#F4F6FA",
   },
   header: {
-    justifyContent: "flex-end",
-    backgroundColor: "#8f8f8f",
-    paddingHorizontal: 22,
-    paddingBottom: 14,
+    backgroundColor: "#1B3A6B",
+    paddingHorizontal: 20,
+    paddingBottom: 18,
   },
   headerTitle: {
-    color: "#ffffff",
-    fontSize: 20,
+    color: "#FFFFFF",
+    fontSize: 28,
     fontWeight: "800",
+    letterSpacing: 0.5,
+  },
+  headerSub: {
+    color: "rgba(255,255,255,0.7)",
+    fontSize: 15,
+    fontWeight: "600",
+    marginTop: 3,
   },
   content: {
     paddingHorizontal: 16,
-    paddingTop: 24,
-    paddingBottom: 28,
-    gap: 14,
+    paddingTop: 16,
+    paddingBottom: 40,
+    gap: 22,
+  },
+  serverCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#FFFFFF",
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    borderWidth: 1.5,
+    borderColor: "#DDE3EC",
+    gap: 12,
+  },
+  serverDot: {
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+  },
+  serverBody: {
+    flex: 1,
+    gap: 3,
+  },
+  serverLabel: {
+    color: "#546E7A",
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  serverStatus: {
+    fontSize: 17,
+    fontWeight: "800",
+  },
+  serverRefreshLabel: {
+    color: "#1B3A6B",
+    fontSize: 13,
+    fontWeight: "700",
+  },
+  section: {
+    gap: 10,
+  },
+  sectionTitle: {
+    color: "#1A1A2E",
+    fontSize: 19,
+    fontWeight: "800",
   },
   streamCard: {
     width: "100%",
     aspectRatio: 16 / 9,
     overflow: "hidden",
-    backgroundColor: "#8f8f8f",
+    backgroundColor: "#1A1A2E",
+    borderRadius: 12,
   },
   webView: {
     flex: 1,
-    backgroundColor: "#8f8f8f",
   },
   emptyStream: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
+    gap: 10,
+    paddingHorizontal: 24,
+  },
+  emptyStreamIcon: {
+    color: "rgba(255,255,255,0.3)",
+    fontSize: 40,
   },
   emptyStreamText: {
-    color: "#ffffff",
-    fontSize: 15,
+    color: "rgba(255,255,255,0.85)",
+    fontSize: 18,
     fontWeight: "700",
+  },
+  emptyStreamHint: {
+    color: "rgba(255,255,255,0.5)",
+    fontSize: 14,
+    fontWeight: "500",
+    textAlign: "center",
   },
   zoneOverlay: {
     ...StyleSheet.absoluteFillObject,
@@ -219,102 +330,90 @@ const styles = StyleSheet.create({
   },
   urlInput: {
     flex: 1,
-    minHeight: 44,
-    borderWidth: 1,
-    borderColor: "#d7d7d7",
-    paddingHorizontal: 12,
-    color: "#222222",
-    fontSize: 13,
+    height: 56,
+    borderWidth: 1.5,
+    borderColor: "#DDE3EC",
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    color: "#1A1A2E",
+    fontSize: 14,
+    backgroundColor: "#FFFFFF",
   },
   connectButton: {
-    minWidth: 68,
-    minHeight: 44,
+    width: 84,
+    height: 56,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#444444",
+    backgroundColor: "#1B3A6B",
+    borderRadius: 10,
   },
   connectButtonText: {
-    color: "#ffffff",
-    fontSize: 14,
+    color: "#FFFFFF",
+    fontSize: 17,
     fontWeight: "800",
   },
-  actionRow: {
+  zoneButton: {
     flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 68,
+    backgroundColor: "#1B3A6B",
+    borderRadius: 12,
     gap: 8,
   },
-  zoneButton: {
-    flex: 1,
-    minHeight: 84,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#8f8f8f",
+  zoneButtonPlus: {
+    color: "#FFFFFF",
+    fontSize: 26,
+    fontWeight: "700",
+    lineHeight: 30,
   },
   zoneButtonText: {
-    color: "#ffffff",
-    fontSize: 18,
-    fontWeight: "900",
+    color: "#FFFFFF",
+    fontSize: 19,
+    fontWeight: "800",
   },
-  clearButton: {
-    width: 82,
-    minHeight: 84,
+  zoneInfo: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 4,
+  },
+  zoneInfoText: {
+    color: "#1A1A2E",
+    fontSize: 15,
+    fontWeight: "600",
+  },
+  zoneClearText: {
+    color: "#C62828",
+    fontSize: 15,
+    fontWeight: "700",
+  },
+  zoneHint: {
+    color: "#546E7A",
+    fontSize: 14,
+    fontWeight: "500",
+    paddingHorizontal: 4,
+  },
+  alertHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  alertBadge: {
+    minWidth: 28,
+    height: 28,
+    borderRadius: 14,
     alignItems: "center",
     justifyContent: "center",
-    borderWidth: 2,
-    borderColor: "#8f8f8f",
+    backgroundColor: "#C62828",
+    paddingHorizontal: 7,
   },
-  clearButtonText: {
-    color: "#555555",
+  alertBadgeText: {
+    color: "#FFFFFF",
     fontSize: 15,
     fontWeight: "800",
   },
-  zoneSummary: {
-    minHeight: 26,
-    justifyContent: "center",
-  },
-  zoneSummaryText: {
-    color: "#777777",
-    fontSize: 13,
-    fontWeight: "600",
-  },
-  backendStatus: {
-    minHeight: 66,
-    flexDirection: "row",
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: "#d7d7d7",
-    paddingHorizontal: 12,
-    gap: 10,
-  },
-  backendStatusDot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    backgroundColor: "#ff9500",
-  },
-  backendStatusDotOnline: {
-    backgroundColor: "#34c759",
-  },
-  backendStatusBody: {
-    flex: 1,
-    minWidth: 0,
-    gap: 2,
-  },
-  backendStatusLabel: {
-    color: "#777777",
-    fontSize: 12,
-    fontWeight: "800",
-  },
-  backendStatusText: {
-    color: "#111111",
-    fontSize: 14,
-    fontWeight: "900",
-  },
-  backendUrlText: {
-    color: "#777777",
-    fontSize: 12,
-    fontWeight: "600",
-  },
   alertList: {
-    gap: 12,
+    gap: 10,
   },
 });

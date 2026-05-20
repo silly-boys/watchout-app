@@ -1,50 +1,30 @@
-import React, { useMemo, useState } from "react";
-import { StyleProp, StyleSheet, Text, View, ViewStyle } from "react-native";
+import React, { useMemo } from "react";
+import { StyleProp, StyleSheet, View, ViewStyle } from "react-native";
 import { WebView } from "react-native-webview";
+import { buildWebRTCHtml } from "../utils";
 
 type Props = {
-  streamUrl: string;
+  offerUrl: string;
   style?: StyleProp<ViewStyle>;
 };
 
-export function StreamWebView({ streamUrl, style }: Props) {
-  const [error, setError] = useState("");
-
-  const source = useMemo(
-    () => ({
-      uri: streamUrl,
-      headers: {
-        "ngrok-skip-browser-warning": "1",
-        "Cache-Control": "no-cache",
-      },
-    }),
-    [streamUrl]
-  );
+export function StreamWebView({ offerUrl, style }: Props) {
+  const html = useMemo(() => buildWebRTCHtml(offerUrl), [offerUrl]);
 
   return (
     <View style={[styles.container, style]}>
       <WebView
-        key={streamUrl}
+        key={offerUrl}
         originWhitelist={["*"]}
-        source={source}
+        source={{ html }}
         style={styles.webView}
         javaScriptEnabled
         allowsInlineMediaPlayback
         allowUniversalAccessFromFileURLs
+        mediaPlaybackRequiresUserAction={false}
         mixedContentMode="always"
         scrollEnabled={false}
-        onLoadStart={() => setError("")}
-        onError={(event) => setError(event.nativeEvent.description)}
-        onHttpError={(event) =>
-          setError(`HTTP ${event.nativeEvent.statusCode}`)
-        }
       />
-      {error ? (
-        <View style={styles.error}>
-          <Text style={styles.errorText}>스트림 연결 실패: {error}</Text>
-          <Text style={styles.errorUrl}>{streamUrl}</Text>
-        </View>
-      ) : null}
     </View>
   );
 }
@@ -52,30 +32,10 @@ export function StreamWebView({ streamUrl, style }: Props) {
 const styles = StyleSheet.create({
   container: {
     overflow: "hidden",
-    backgroundColor: "#8f8f8f",
+    backgroundColor: "#1A1A2E",
   },
   webView: {
     flex: 1,
-    backgroundColor: "#8f8f8f",
-  },
-  error: {
-    ...StyleSheet.absoluteFillObject,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#8f8f8f",
-    padding: 16,
-  },
-  errorText: {
-    color: "#ffffff",
-    fontSize: 14,
-    fontWeight: "800",
-    textAlign: "center",
-  },
-  errorUrl: {
-    marginTop: 6,
-    color: "rgba(255,255,255,0.72)",
-    fontSize: 12,
-    fontWeight: "600",
-    textAlign: "center",
+    backgroundColor: "#1A1A2E",
   },
 });

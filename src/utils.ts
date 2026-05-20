@@ -15,135 +15,99 @@ export function toSvgPoints(
     .join(" ");
 }
 
-export function normalizeStreamUrl(input: string) {
+export function buildOfferUrl(input: string): string {
   const trimmed = input.trim();
   if (!trimmed) return "";
-  if (trimmed.endsWith("/stream")) return trimmed;
-  if (trimmed.endsWith("/snapshot"))
-    return trimmed.replace(/\/snapshot$/, "/stream");
-  return `${trimmed.replace(/\/$/, "")}/stream`;
+  const base = trimmed
+    .replace(/\/(offer|stream|snapshot)\/?$/, "")
+    .replace(/\/$/, "");
+  return `${base}/offer`;
 }
 
-export function buildStreamHtml(streamUrl: string) {
-  const safeUrl = JSON.stringify(streamUrl);
-
+export function buildWebRTCHtml(offerUrl: string): string {
+  const safeUrl = JSON.stringify(offerUrl);
   return `<!DOCTYPE html>
 <html>
 <head>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
   <style>
-    * { box-sizing: border-box; margin: 0; }
-    html, body { width: 100%; height: 100%; overflow: hidden; background: #8f8f8f; }
-    img { width: 100%; height: 100%; object-fit: cover; display: block; }
-    #status {
-      position: absolute;
-      inset: 0;
-      display: grid;
-      place-items: center;
-      color: #fff;
-      font-size: 14px;
-      line-height: 1.45;
-      font-family: sans-serif;
-      text-align: center;
-      padding: 16px;
-      background: #8f8f8f;
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { width: 100%; height: 100%; overflow: hidden; background: #1A1A2E; }
+    video { width: 100%; height: 100%; object-fit: cover; display: block; }
+    #overlay {
+      position: absolute; inset: 0;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center; padding: 20px;
     }
-    #status.hidden { display: none; }
-    small { display: block; margin-top: 6px; color: rgba(255,255,255,0.72); word-break: break-all; }
+    #overlay.hidden { display: none; }
+    #msg { color: #fff; font-family: sans-serif; font-size: 16px; font-weight: 700; text-align: center; }
+    #sub { margin-top: 8px; color: rgba(255,255,255,0.5); font-family: sans-serif; font-size: 13px; text-align: center; word-break: break-all; }
   </style>
 </head>
 <body>
-  <img id="stream" alt="camera stream" />
-  <div id="status">스트림 연결 중<small></small></div>
+  <video id="v" autoplay playsinline muted></video>
+  <div id="overlay">
+    <div id="msg">WebRTC 연결 중...</div>
+    <div id="sub"></div>
+  </div>
   <script>
-    const streamUrl = ${safeUrl};
-    const img = document.getElementById("stream");
-    const status = document.getElementById("status");
-    const statusUrl = status.querySelector("small");
-    let previousUrl = null;
+    (async () => {
+      const OFFER_URL = ${safeUrl};
+      const overlay = document.getElementById('overlay');
+      const msg = document.getElementById('msg');
+      const sub = document.getElementById('sub');
+      const video = document.getElementById('v');
 
-    statusUrl.textContent = streamUrl;
-
-    function setStatus(message, isVisible = true) {
-      status.firstChild.nodeValue = message;
-      status.className = isVisible ? "" : "hidden";
-    }
-
-    function concat(a, b) {
-      const c = new Uint8Array(a.length + b.length);
-      c.set(a, 0);
-      c.set(b, a.length);
-      return c;
-    }
-
-    function findSequence(buf, seq) {
-      outer: for (let i = 0; i <= buf.length - seq.length; i++) {
-        for (let j = 0; j < seq.length; j++) {
-          if (buf[i + j] !== seq[j]) continue outer;
-        }
-        return i;
-      }
-      return -1;
-    }
-
-    async function start() {
-      if (!streamUrl) {
-        setStatus("스트림 주소를 입력하세요");
-        return;
+      function showStatus(text, detail) {
+        msg.textContent = text;
+        sub.textContent = detail || '';
+        overlay.classList.remove('hidden');
       }
 
       try {
-        const response = await fetch(streamUrl, {
-          headers: {
-            "ngrok-skip-browser-warning": "1",
-            "Cache-Control": "no-cache"
-          }
+        const pc = new RTCPeerConnection({
+          iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
         });
 
-        if (!response.ok) {
-          throw new Error("HTTP " + response.status);
-        }
+        pc.ontrack = (e) => {
+          video.srcObject = e.streams[0];
+          overlay.classList.add('hidden');
+        };
 
-        if (!response.body || !response.body.getReader) {
-          img.src = streamUrl;
-          setStatus("", false);
-          return;
-        }
+        pc.onconnectionstatechange = () => {
+          const s = pc.connectionState;
+          if (s === 'failed' || s === 'disconnected') showStatus('연결 끊김', s);
+        };
 
-        const reader = response.body.getReader();
-        let buffer = new Uint8Array();
-        const soi = [0xff, 0xd8];
-        const eoi = [0xff, 0xd9];
+        pc.addTransceiver('video', { direction: 'recvonly' });
 
-        while (true) {
-          const result = await reader.read();
-          if (result.done) break;
+        const offer = await pc.createOffer();
+        await pc.setLocalDescription(offer);
 
-          buffer = concat(buffer, result.value);
-          const startIndex = findSequence(buffer, soi);
-          const endIndex = findSequence(buffer, eoi);
+        // Wait for ICE gathering (max 5s)
+        await new Promise(resolve => {
+          if (pc.iceGatheringState === 'complete') { resolve(); return; }
+          const timeout = setTimeout(resolve, 5000);
+          pc.addEventListener('icegatheringstatechange', () => {
+            if (pc.iceGatheringState === 'complete') { clearTimeout(timeout); resolve(); }
+          });
+        });
 
-          if (startIndex !== -1 && endIndex !== -1 && endIndex > startIndex) {
-            const jpeg = buffer.slice(startIndex, endIndex + 2);
-            buffer = buffer.slice(endIndex + 2);
-            const objectUrl = URL.createObjectURL(
-              new Blob([jpeg], { type: "image/jpeg" })
-            );
+        const res = await fetch(OFFER_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sdp: pc.localDescription.sdp, type: pc.localDescription.type })
+        });
 
-            img.src = objectUrl;
-            setStatus("", false);
+        if (!res.ok) throw new Error('서버 오류 ' + res.status);
 
-            if (previousUrl) URL.revokeObjectURL(previousUrl);
-            previousUrl = objectUrl;
-          }
-        }
-      } catch (error) {
-        const message = error instanceof Error ? error.message : "unknown";
-        setStatus("스트림 연결 실패: " + message);
+        const answer = await res.json();
+        await pc.setRemoteDescription(answer);
+
+      } catch (err) {
+        showStatus('연결 실패', err.message || String(err));
       }
-    }
-
-    start();
+    })();
   </script>
 </body>
 </html>`;
