@@ -2,7 +2,7 @@ import { DetectionAlert } from "./types";
 
 export const DEFAULT_STREAM_URL = "http://10.80.162.190:8080";
 
-export const BACKEND_BASE_URL = "https://watchout.cher1shrxd.me";
+export const BACKEND_BASE_URL = "http://10.80.162.190:8000";
 
 export const INITIAL_ALERTS: DetectionAlert[] = [
   {
