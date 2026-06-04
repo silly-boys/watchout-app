@@ -3,11 +3,14 @@
     "name": "WatchOut",
     "slug": "watchout-app",
     "version": "1.0.0",
-    "orientation": "portrait",
+    "orientation": "default",
     "userInterfaceStyle": "light",
     "splash": {
       "backgroundColor": "#ffffff"
     },
+    "plugins": [
+      "expo-notifications"
+    ],
     "assetBundlePatterns": [
       "**/*"
     ],

@@ -32,10 +32,10 @@ export function StreamWebView({ offerUrl, style }: Props) {
 const styles = StyleSheet.create({
   container: {
     overflow: "hidden",
-    backgroundColor: "#1A1A2E",
+    backgroundColor: "#020617",
   },
   webView: {
     flex: 1,
-    backgroundColor: "#1A1A2E",
+    backgroundColor: "#020617",
   },
 });

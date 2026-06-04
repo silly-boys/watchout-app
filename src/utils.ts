@@ -57,6 +57,7 @@ export function buildWebRTCHtml(offerUrl: string): string {
       const msg = document.getElementById('msg');
       const sub = document.getElementById('sub');
       const video = document.getElementById('v');
+      let pc;
 
       function showStatus(text, detail) {
         msg.textContent = text;
@@ -64,8 +65,24 @@ export function buildWebRTCHtml(offerUrl: string): string {
         overlay.classList.remove('hidden');
       }
 
+      function cleanup() {
+        if (video.srcObject) {
+          video.srcObject.getTracks().forEach(track => track.stop());
+          video.srcObject = null;
+        }
+        if (pc) {
+          pc.ontrack = null;
+          pc.onconnectionstatechange = null;
+          pc.close();
+          pc = null;
+        }
+      }
+
+      window.addEventListener('pagehide', cleanup);
+      window.addEventListener('beforeunload', cleanup);
+
       try {
-        const pc = new RTCPeerConnection({
+        pc = new RTCPeerConnection({
           iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
         });
 

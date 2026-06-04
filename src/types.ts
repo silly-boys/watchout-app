@@ -17,4 +17,5 @@ export type DetectionAlert = {
   zone: string;
   ago: string;
   severity: AlertSeverity;
+  count?: number;
 };
