@@ -4,6 +4,7 @@ import * as Device from "expo-device";
 import * as Notifications from "expo-notifications";
 import { StatusBar } from "expo-status-bar";
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import EventSource, { EventSourceListener } from "react-native-sse";
 import {
   LayoutChangeEvent,
   PanResponder,
@@ -28,7 +29,7 @@ import {
   upsertFcmToken,
   upsertFence,
 } from "./src/api";
-import { DEFAULT_STREAM_URL, INITIAL_ALERTS } from "./src/constants";
+import { BACKEND_BASE_URL, DEFAULT_STREAM_URL, INITIAL_ALERTS } from "./src/constants";
 import { DetectionAlert, Point, Zone } from "./src/types";
 import { buildOfferUrl, clamp, toSvgPoints } from "./src/utils";
 
@@ -195,10 +196,29 @@ function App() {
     refreshBackendStatus();
     loadEvents();
     registerPushToken();
-    const eventsInterval = setInterval(loadEvents, 10000);
+
+    const eventsSource = new EventSource<"event" | "new_event">(
+      `${BACKEND_BASE_URL}/api/events/stream`,
+      {
+        headers: {
+          Accept: "text/event-stream",
+        },
+      }
+    );
+
+    const eventStreamListener: EventSourceListener<"event" | "new_event"> = (event) => {
+      if (event.type === "message" || event.type === "event" || event.type === "new_event") {
+        loadEvents();
+      }
+    };
+
+    eventsSource.addEventListener("message", eventStreamListener);
+    eventsSource.addEventListener("event", eventStreamListener);
+    eventsSource.addEventListener("new_event", eventStreamListener);
 
     return () => {
-      clearInterval(eventsInterval);
+      eventsSource.removeAllEventListeners();
+      eventsSource.close();
       if (switchTimerRef.current) {
         clearTimeout(switchTimerRef.current);
       }
